@@ -8,6 +8,7 @@
 |Python             |>= 3.12 |
 |python-telegram-bot|>= 21.10|
 |googletrans        |>= 4.0.2|
+|langdetect         |>= 1.0.9|
 
 ## Setup
  1. Install dependencies by running `python -m pip install "python-telegram-bot>=21.10"` command.
