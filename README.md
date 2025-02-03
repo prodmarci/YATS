@@ -26,3 +26,7 @@
  4. Run the `start.py` script, and everything else will launch automatically.
  
  5. If you set up `config.json` correctly, you should see the admin panel. Enjoy customizing the bot!
+
+## Legal notice
+
+This bot is provided for lawful and legitimate purposes **only**. I do not encourage, endorse, or support any illegal activities. I do not take any responsibility for any misuse, illegal activities, or damages caused by this software. Users assume full responsibility for compliance with laws applicable in their country.
