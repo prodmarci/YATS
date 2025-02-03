@@ -29,4 +29,4 @@
 
 ## Legal notice
 
-This bot is provided for lawful and legitimate purposes **only**. I do not encourage, endorse, or support any illegal activities. I do not take any responsibility for any misuse, illegal activities, or damages caused by this software. Users assume full responsibility for compliance with laws applicable in their country.
+This bot is provided for lawful and legitimate purposes **only**. I do not encourage, endorse, or support any illegal activities. I do not take responsibility for any misuse, illegal activities, or damages caused by this software. Users assume full responsibility for compliance with laws applicable in their country.
