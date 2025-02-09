@@ -13,6 +13,17 @@ CREATE TABLE IF NOT EXISTS products (
 )
 ''')
 
+def get_product_by_id(product_id):
+    cursor.execute('SELECT * FROM products WHERE id = ?', (product_id,))
+    row = cursor.fetchone()
+    
+    if row:
+        product = {"id": row[0], "name": row[1], "price": row[2], "description": row[3], "in_stock": row[4]}
+    else:
+        print("No products found.")
+        
+    return product
+
 def list_products():
     cursor.execute('SELECT * FROM products')
     rows = cursor.fetchall()

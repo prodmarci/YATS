@@ -2,9 +2,13 @@ import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext
 
-import importlib
 import user.user as userdata
 import products.products as productdata
+
+import stats.bot as bot_visitdata
+import stats.product as product_visitdata
+
+import importlib
 import langpacks.english
 import langpacks.polish
 
@@ -23,7 +27,14 @@ def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_callback))
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
+
+# CHECK FOR USER IN OPERATOR ID'S CONFIG LINE
+def admin_check(user):
+    if get_user_info(user, "user_id") in OPERATOR_IDS:
+        return True
+    else:
+        return False
 
 # GETTER FOR USER INFO (LOADS PERSISTENT USER DATA)
 def get_user_info(user, info):
@@ -39,6 +50,19 @@ def get_user_info(user, info):
         case "lang":
             return importlib.import_module(userdata.get_user_language(user_id))
 
+# GETTER FOR PRODUCT INFO
+def get_product_info(product_id, info):
+    product = productdata.get_product_by_id(product_id)
+    match info:
+        case "name":
+            return product['name']
+        case "price":
+            return product['price']
+        case "description":
+            return product['description']
+        case "stock":
+            return product['in_stock']
+
 # GETTER AND SETTER FOR BOT NAME STRING
 def set_get_bot_name(context=None):
     if context is not None:
@@ -50,8 +74,10 @@ def set_get_bot_name(context=None):
 async def start(update: Update, context: CallbackContext) -> None:
     user = update.message.from_user
     
-    # SAVES BOT NAME IN THE FUNCTION
+    # DONE: SAVES BOT NAME
     set_get_bot_name(context)
+    
+    bot_visitdata.add_user(get_user_info(user,"user_id"))
     
     message = get_user_info(user, "lang").get_main_menu_text(
         get_user_info(user, "user_id"),
@@ -60,24 +86,8 @@ async def start(update: Update, context: CallbackContext) -> None:
         get_user_info(user, "balance"))
     await update.message.reply_text(message, reply_markup=get_main_menu(user))
     
-# GETTER FOR MAIN MENU, ADDS AN ADMIN PANEL FOR OPERATORS
-def get_main_menu(user):
-    keyboard = [
-        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("products"), callback_data="products_callback")],
-        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("topup"), callback_data="topup_callback")],
-        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("operator"), url=f"https://t.me/{OPERATOR_USERNAME}"),
-         InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("channel"), url=CHANNEL_LINK)],
-        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("language"), callback_data="language_callback")]
-    ]
-    
-    if get_user_info(user, "user_id") in OPERATOR_IDS:
-        keyboard.append(
-            [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("admin"), callback_data="admin_panel")]
-        )
-    
-    return InlineKeyboardMarkup(keyboard)
-    
 # MAIN BUTTON HANDLER
+# TODO: CREATE PAGE FOR PRODUCT CALLBACK
 async def button_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     user = query.from_user
@@ -110,11 +120,37 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
                 get_user_info(user, "balance"))
             
             await query.message.edit_text(message, reply_markup=get_main_menu(user))
+            
+        case _ if query.data.startswith("product_"):
+            product_id = query.data.replace("product_","")
+            product_visitdata.increment_visits(product_id)
+            
+            if get_product_info(product_id, "stock") == 0:
+                in_stock = get_user_info(user, "lang").get_product_state("soldout")
+            else:
+                in_stock = get_user_info(user, "lang").get_product_state("instock")
+            
+            message = get_user_info(user, "lang").get_product_menu_text(
+                set_get_bot_name(),
+                get_product_info(product_id, "name"),
+                get_product_info(product_id, "price"),
+                get_product_info(product_id, "description"),
+                in_stock,
+                get_product_info(product_id, "stock")
+                )
+            
+            await query.message.edit_text(message, reply_markup=get_product_menu(user, product_id))
 
         case "admin_panel":
-            message = get_user_info(user, "lang").get_admin_menu_text(set_get_bot_name())
-            #TODO: ADD TOTAL USERS STAT
-            await query.message.edit_text(message, reply_markup=get_admin_menu(user))
+            if admin_check(user):
+                message = get_user_info(user, "lang").get_admin_menu_text(
+                    set_get_bot_name(),
+                    bot_visitdata.get_user_count(30)
+                    )
+                await query.message.edit_text(message, reply_markup=get_admin_menu(user))
+            else:
+                message = get_user_info(user, "lang").get_no_permission_text()
+                await query.message.edit_text(message, reply_markup=get_back_button(user))
         
         case "back":
             message = get_user_info(user, "lang").get_main_menu_text(
@@ -124,6 +160,43 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
                 get_user_info(user, "balance"))
             
             await query.message.edit_text(message, reply_markup=get_main_menu(user))
+
+# GETTER FOR MAIN MENU, ADDS AN ADMIN PANEL FOR OPERATORS
+# TODO: CART CALLBACK
+def get_main_menu(user):
+    keyboard = [
+        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("products"), callback_data="products_callback")],
+        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("cart"), callback_data="cart_callback")],
+        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("topup"), callback_data="topup_callback")],
+        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("operator"), url=f"https://t.me/{OPERATOR_USERNAME}"),
+         InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("channel"), url=CHANNEL_LINK)],
+        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("language"), callback_data="language_callback")]
+    ]
+    
+    if admin_check(user):
+        keyboard.append(
+            [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("admin"), callback_data="admin_panel")]
+        )
+    
+    return InlineKeyboardMarkup(keyboard)
+
+# GETTER FOR PRODUCT MENU
+# TODO: PAYMENT HANDLING
+def get_product_menu(user, product_id):
+    callback_data = f"product_{product_id}"
+    
+    if (get_product_info(product_id,"stock")):
+        keyboard = [
+            [InlineKeyboardButton(get_user_info(user, "lang").get_purchase_button(), callback_data=callback_data)],
+        ]
+    else:
+        keyboard = [
+            [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("operator"), url=f"https://t.me/{OPERATOR_USERNAME}")],
+        ]
+    
+    keyboard.append([InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("back"), callback_data="products_callback")])
+    
+    return InlineKeyboardMarkup(keyboard)
 
 # GETTER FOR PRODUCTS MENU & GENERATOR FOR ALL THE PRODUCT BUTTONS
 def get_products_menu(user):
@@ -135,9 +208,13 @@ def get_products_menu(user):
             in_stock = get_user_info(user, "lang").get_product_state("soldout")
         else:
             in_stock = get_user_info(user, "lang").get_product_state("instock")
+            
+        if admin_check(user):
+            button_text = f"ID: {product['id']} - {product['name']} - {product['price']} PLN - {in_stock}"
+        else:
+            button_text = f"{product['name']} - {product['price']} PLN - {in_stock}"
         
-        button_text = f"{product['name']} - {product['price']} PLN - {in_stock}"
-        callback_data = f"product_{product['name'].lower().replace(' ', '_')}"
+        callback_data = f"product_{product['id']}"
         keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
 
     keyboard.append([InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("back"), callback_data="back")])
@@ -166,11 +243,19 @@ def get_language_menu(user):
     
     return InlineKeyboardMarkup(keyboard)
 
+# GETTER FOR BACK BUTTON (MAIN MENU BACK)
+def get_back_button(user):
+    keyboard = [
+        [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("back"), callback_data="back")]
+    ]
+    
+    return InlineKeyboardMarkup(keyboard)
+
 # GETTER FOR ADMIN MENU
 def get_admin_menu(user):
     keyboard = [
-        [InlineKeyboardButton("product management", callback_data="topup_callback")],
-        [InlineKeyboardButton("banhammer", callback_data="topup_callback")],
+        [InlineKeyboardButton(get_user_info(user, "lang").get_admin_menu_button_text("stats"), callback_data="back")],
+        [InlineKeyboardButton(get_user_info(user, "lang").get_admin_menu_button_text("products"), callback_data="back")],
         [InlineKeyboardButton(get_user_info(user, "lang").get_main_menu_button_text("back"), callback_data="back")]
     ]
     

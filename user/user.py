@@ -35,5 +35,5 @@ def get_user_language(user_id):
     if value:
         return value[0]
     else:
-        set_user_language(user_id, "langpacks.polish")
+        set_user_language(user_id, "langpacks.english")
         return get_user_language(user_id)
