@@ -9,7 +9,7 @@
 |python-telegram-bot|>= 21.10|
 
 ## Setup
- 1. Install dependencies..
+ 1. Install dependencies.
  
  2. Message [@BotFather](https://telegram.me/BotFather) on Telegram and go through the setup process to obtain your HTTP_API token.
 
